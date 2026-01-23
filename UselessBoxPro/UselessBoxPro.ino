@@ -26,8 +26,8 @@ const int lidServoPosOpen = 20; // pos of lidServo open
 // Servo pos variables
 int fingerServoPos = fingerServoPosStationary;
 int lidServoPos = lidServoPosClose;
-int targetDegree = 0; // variable for controlling servo target
-int stepDelayMs = 10; // variable for controlling servo speed
+const int stepDelayMsFast = 10; // servo step delay resulting in fast speed
+const int stepDelayMsSlow = 60; // servo step delay resulting in slow speed
 
 // Behavior variables
 typedef void (*BehaviorFn)();
@@ -41,9 +41,9 @@ struct WeightedBehavior {
 void setup() {
   pinMode(togglePin, INPUT_PULLUP); // enable internal pull-up
   pinMode(ledDebugPin, OUTPUT); // onboard led shows toggle status
-  fingerServo.attach(fingerServoPin); // attaches the servo pin to the Servo object
+  fingerServo.attach(fingerServoPin); // attache the servo pin to the Servo object
   fingerServo.write(fingerServoPos); // set the servo initial position
-  lidServo.attach(lidServoPin); // attaches the servo pin to the Servo object
+  lidServo.attach(lidServoPin); // attache the servo pin to the Servo object
   lidServo.write(lidServoPos); // set the servo initial position
   Serial.begin(9600);
   randomSeed(analogRead(A0)); // random seed
@@ -51,32 +51,30 @@ void setup() {
 
 /////////////////////////////// FUNCTIONS //////////////////////////////////
 
-// Move fingerServo from current pos to targetDegree with a step delay
-void fingerServoMove(int targetDegree, int stepDelayMs = 10) {
-  //targetDegree = constrain(targetDegree, 0, 180);
-  if (fingerServoPos < targetDegree) {
-    for (fingerServoPos; fingerServoPos <= targetDegree; fingerServoPos++) {
+// Move fingerServo from current pos to target pos with a step delay
+void fingerServoMove(int targetPos, int stepDelayMs) {
+  if (fingerServoPos < targetPos) {
+    for (; fingerServoPos <= targetPos; fingerServoPos++) {
       fingerServo.write(fingerServoPos);
       delay(stepDelayMs);
     }
   } else {
-    for (fingerServoPos; fingerServoPos >= targetDegree; fingerServoPos--) {
+    for (; fingerServoPos >= targetPos; fingerServoPos--) {
       fingerServo.write(fingerServoPos);
       delay(stepDelayMs);
     }
   }
 }
 
-// Move lidServo from current pos to targetDegree with a step delay
-void lidServoMove(int targetDegree, int stepDelayMs = 10) {
-  //targetDegree = constrain(targetDegree, 0, 180);
-  if (lidServoPos < targetDegree) {
-    for (lidServoPos; lidServoPos <= targetDegree; lidServoPos++) {
+// Move lidServo from current pos to target pos with a step delay
+void lidServoMove(int targetPos, int stepDelayMs) {
+  if (lidServoPos < targetPos) {
+    for (; lidServoPos <= targetPos; lidServoPos++) {
       lidServo.write(lidServoPos);
       delay(stepDelayMs);
     }
   } else {
-    for (lidServoPos; lidServoPos >= targetDegree; lidServoPos--) {
+    for (; lidServoPos >= targetPos; lidServoPos--) {
       lidServo.write(lidServoPos);
       delay(stepDelayMs);
     }
@@ -98,50 +96,46 @@ int randomBetween(int low, int high) {
 // open lid fast, move finger fast, return finger fast, close lid fast
 void behavior_0() {
   // open lid
+  lidServoMove(lidServoPosOpen, stepDelayMsFast);
   // finger go
-  targetDegree = fingerServoPosToggle - fingerServoPosStationary;
-  stepDelayMs = 10;
-  fingerServoMove(targetDegree, stepDelayMs);
+  fingerServoMove(fingerServoPosToggle, stepDelayMsFast);
   // finger return 
-  targetDegree = fingerServoPosStationary - fingerServoPosToggle;
-  stepDelayMs = 10;
-  fingerServoMove(targetDegree, stepDelayMs);
+  fingerServoMove(fingerServoPosStationary, stepDelayMsFast);
   // close lid
+  lidServoMove(lidServoPosClose, stepDelayMsFast);
 }
 
 // open lid fast, move finger slow, return finger slow, close lid fast
 void behavior_1() {
   // open lid
+  lidServoMove(lidServoPosOpen, stepDelayMsFast);
   // finger go
-  targetDegree = fingerServoPosToggle - fingerServoPosStationary;
-  stepDelayMs = 50;
-  fingerServoMove(targetDegree, stepDelayMs);
+  fingerServoMove(fingerServoPosToggle, stepDelayMsSlow);
   // finger return 
-  targetDegree = fingerServoPosStationary - fingerServoPosToggle;
-  stepDelayMs = 50;
-  fingerServoMove(targetDegree, stepDelayMs);
+  fingerServoMove(fingerServoPosStationary, stepDelayMsSlow);
   // close lid
+  lidServoMove(lidServoPosClose, stepDelayMsFast);
 }
 
-// open lid fast, move finger slow, return finger fast, close lid fast
+// open lid fast, move finger slow, return finger slow, close lid fast
 void behavior_2() {
+  int lidServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
+  int fingerServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
   // open lid
+  lidServoMove(lidServoPosOpen, lidServoStepDelayMs);
   // finger go
-  targetDegree = fingerServoPosToggle - fingerServoPosStationary;
-  stepDelayMs = 50;
-  fingerServoMove(targetDegree, stepDelayMs);
+  fingerServoMove(fingerServoPosToggle, fingerServoStepDelayMs);
   // finger return 
-  targetDegree = fingerServoPosStationary - fingerServoPosToggle;
-  stepDelayMs = 10;
-  fingerServoMove(targetDegree, stepDelayMs);
+  fingerServoMove(fingerServoPosStationary, fingerServoStepDelayMs);
   // close lid
+  lidServoMove(lidServoPosClose, lidServoStepDelayMs);
 }
 
 // behaviors occurance weights
 WeightedBehavior behaviors[] = {
   { behavior_0, 1 },
   { behavior_1, 1 },
-  { behavior_2, 1 },
+  { behavior_2, 5 },
 };
 
 // compile behaviors
@@ -183,5 +177,5 @@ void loop() {
     digitalWrite(ledDebugPin, LOW); // DEBUG: toggle off -> led off
   }
 
-  delay(100);
+  delay(10);
 }
