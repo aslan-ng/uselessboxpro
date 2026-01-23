@@ -29,8 +29,13 @@ int lidServoPos = lidServoPosClose;
 const int stepDelayMsFast = 10; // servo step delay resulting in fast speed
 const int stepDelayMsSlow = 60; // servo step delay resulting in slow speed
 
-// Behavior variables
-typedef void (*BehaviorFn)();
+// Behavior context
+struct BehaviorContext {
+  bool toggleStatus;   // true = ON (switch pressed), false = OFF
+  float distanceCm;    // proximity sensor distance in cm
+};
+
+typedef void (*BehaviorFn)(const BehaviorContext& ctx);
 
 struct WeightedBehavior {
   BehaviorFn fn;
@@ -81,6 +86,17 @@ void lidServoMove(int targetPos, int stepDelayMs) {
   }
 }
 
+float readProximity() {
+  // TODO: replace with your sensor read (HC-SR04, VL53L0X, Sharp IR, etc.)
+  // For now, return a placeholder.
+  return 999.0;
+}
+
+// Read toggle status
+bool readToggleStatus() {
+  return (digitalRead(togglePin) == LOW);
+}
+
 // Generate a random number between low and high
 int randomBetween(int low, int high) {
   if (low > high) {
@@ -93,42 +109,45 @@ int randomBetween(int low, int high) {
 
 /////////////////////////////// BEHAVIORS //////////////////////////////////
 
-// open lid fast, move finger fast, return finger fast, close lid fast
-void behavior_0() {
-  // open lid
-  lidServoMove(lidServoPosOpen, stepDelayMsFast);
-  // finger go
-  fingerServoMove(fingerServoPosToggle, stepDelayMsFast);
-  // finger return 
-  fingerServoMove(fingerServoPosStationary, stepDelayMsFast);
-  // close lid
-  lidServoMove(lidServoPosClose, stepDelayMsFast);
+void behavior_0(const BehaviorContext& ctx) {
+  if (ctx.toggleStatus == true) {
+    digitalWrite(ledDebugPin, HIGH); // DEBUG
+
+    lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
+    fingerServoMove(fingerServoPosToggle, stepDelayMsFast); // finger go fast
+    fingerServoMove(fingerServoPosStationary, stepDelayMsFast); // finger return fast
+    lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
+
+    digitalWrite(ledDebugPin, LOW); // DEBUG
+  }
 }
 
-// open lid fast, move finger slow, return finger slow, close lid fast
-void behavior_1() {
-  // open lid
-  lidServoMove(lidServoPosOpen, stepDelayMsFast);
-  // finger go
-  fingerServoMove(fingerServoPosToggle, stepDelayMsSlow);
-  // finger return 
-  fingerServoMove(fingerServoPosStationary, stepDelayMsSlow);
-  // close lid
-  lidServoMove(lidServoPosClose, stepDelayMsFast);
+void behavior_1(const BehaviorContext& ctx) {
+  if (ctx.toggleStatus == true) {
+    digitalWrite(ledDebugPin, HIGH); // DEBUG
+
+    lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
+    fingerServoMove(fingerServoPosToggle, stepDelayMsSlow); // finger go slow
+    fingerServoMove(fingerServoPosStationary, stepDelayMsSlow); // finger return slow
+    lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
+
+    digitalWrite(ledDebugPin, LOW); // DEBUG
+  }
 }
 
-// open lid fast, move finger slow, return finger slow, close lid fast
-void behavior_2() {
-  int lidServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
-  int fingerServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
-  // open lid
-  lidServoMove(lidServoPosOpen, lidServoStepDelayMs);
-  // finger go
-  fingerServoMove(fingerServoPosToggle, fingerServoStepDelayMs);
-  // finger return 
-  fingerServoMove(fingerServoPosStationary, fingerServoStepDelayMs);
-  // close lid
-  lidServoMove(lidServoPosClose, lidServoStepDelayMs);
+void behavior_2(const BehaviorContext& ctx) {
+  if (ctx.toggleStatus == true) {
+    digitalWrite(ledDebugPin, HIGH); // DEBUG
+    int lidServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
+    int fingerServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
+
+    lidServoMove(lidServoPosOpen, lidServoStepDelayMs); // open lid random speed
+    fingerServoMove(fingerServoPosToggle, fingerServoStepDelayMs); // finger go random speed
+    fingerServoMove(fingerServoPosStationary, fingerServoStepDelayMs); // finger return random speed
+    lidServoMove(lidServoPosClose, lidServoStepDelayMs); // close lid random speed
+
+    digitalWrite(ledDebugPin, LOW); // DEBUG
+  }
 }
 
 // behaviors occurance weights
@@ -143,39 +162,25 @@ const uint8_t behaviorCount = sizeof(behaviors) / sizeof(behaviors[0]);
 
 BehaviorFn pickBehavior() {
   uint16_t totalWeight = 0;
-
-  for (uint8_t i = 0; i < behaviorCount; i++) {
-    totalWeight += behaviors[i].weight;
-  }
+  for (uint8_t i = 0; i < behaviorCount; i++) totalWeight += behaviors[i].weight;
 
   uint16_t r = random(totalWeight);
 
   uint16_t cumulative = 0;
   for (uint8_t i = 0; i < behaviorCount; i++) {
     cumulative += behaviors[i].weight;
-    if (r < cumulative) {
-      return behaviors[i].fn;
-    }
+    if (r < cumulative) return behaviors[i].fn;
   }
-
-  return behaviors[0].fn; // safety fallback
+  return behaviors[0].fn;
 }
 
 ///////////////////////////////// MAIN /////////////////////////////////////
 
 void loop() {
-  bool isOn = (digitalRead(togglePin) == LOW); // Check toggle on/off state
-
-  //digitalWrite(ledDebugPin, isOn ? HIGH : LOW);
-  if (isOn) {
-    digitalWrite(ledDebugPin, HIGH); // DEBUG: toggle on -> led on
-    // random behavior
-    BehaviorFn toggle = pickBehavior();
-    toggle();
-  }
-  else {
-    digitalWrite(ledDebugPin, LOW); // DEBUG: toggle off -> led off
-  }
-
-  delay(10);
+  BehaviorContext ctx;
+  ctx.toggleStatus = readToggleStatus(); // Check toggle on/off state
+  ctx.distanceCm = readProximity(); // Check proximity sensor min value
+  BehaviorFn behavior = pickBehavior();
+  behavior(ctx);
+  delay(50);
 }
