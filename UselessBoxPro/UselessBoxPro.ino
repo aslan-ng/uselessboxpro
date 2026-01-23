@@ -12,16 +12,18 @@ Servo fingerServo; // controls finger
 Servo lidServo; // controls lid
 
 // Pins
-const int ledDebugPin = 13; // onboard LED (Arduino Uno), represents system awakening
-const int togglePin = 2;
-const int fingerServoPin = 5;
-const int lidServoPin = 6;
+const uint8_t ledDebugPin = 13; // onboard LED (Arduino Uno), represents system awakening
+const uint8_t togglePin = 2;
+const uint8_t fingerServoPin = 5;
+const uint8_t lidServoPin = 6;
+const uint8_t XSHUT_PINS[3] = {9, 10, 11}; // proximity sensor pins
 
 // Servo positions checkpoints
-const int fingerServoPosStationary = 0; // pos of fingerServo when stationary
-const int fingerServoPosToggle = 60; //  pos of fingerServo when toggle
-const int lidServoPosClose = 0; // pos of lidServo close
-const int lidServoPosOpen = 20; // pos of lidServo open
+const uint8_t fingerServoPosStationary = 0; // pos of fingerServo when stationary
+const uint8_t fingerServoPosToggle = 60; //  pos of fingerServo when toggle
+const uint8_t lidServoPosClose = 0; // pos of lidServo close
+const uint8_t lidServoPosOpen = 20; // pos of lidServo open
+const uint8_t I2C_ADDRESSES[3]  = {0x30, 0x31, 0x32}; // new unique addresses
 
 // Servo pos variables
 int fingerServoPos = fingerServoPosStationary;
@@ -85,6 +87,7 @@ void lidServoMove(int targetPos, int stepDelayMs) {
   lidServo.detach();
 }
 
+// Read proximity sensors
 float readProximity() {
   // TODO: replace with your sensor read (HC-SR04, VL53L0X, Sharp IR, etc.)
   // For now, return a placeholder.
@@ -120,40 +123,28 @@ void setup() {
 
 void behavior_0(const BehaviorContext& ctx) {
   Serial.println(__func__); // DEBUG
-  digitalWrite(ledDebugPin, HIGH); // DEBUG
-
   lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
   fingerServoMove(fingerServoPosToggle, stepDelayMsFast); // finger go fast
   fingerServoMove(fingerServoPosStationary, stepDelayMsFast); // finger return fast
   lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
-
-  digitalWrite(ledDebugPin, LOW); // DEBUG
 }
 
 void behavior_1(const BehaviorContext& ctx) {
   Serial.println(__func__); // DEBUG
-  digitalWrite(ledDebugPin, HIGH); // DEBUG
-
   lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
   fingerServoMove(fingerServoPosToggle, stepDelayMsSlow); // finger go slow
   fingerServoMove(fingerServoPosStationary, stepDelayMsSlow); // finger return slow
   lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
-
-  digitalWrite(ledDebugPin, LOW); // DEBUG
 }
 
 void behavior_2(const BehaviorContext& ctx) {
   Serial.println(__func__); // DEBUG
-  digitalWrite(ledDebugPin, HIGH); // DEBUG
-
   int lidServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
   int fingerServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
   lidServoMove(lidServoPosOpen, lidServoStepDelayMs); // open lid random speed
   fingerServoMove(fingerServoPosToggle, fingerServoStepDelayMs); // finger go random speed
   fingerServoMove(fingerServoPosStationary, fingerServoStepDelayMs); // finger return random speed
   lidServoMove(lidServoPosClose, lidServoStepDelayMs); // close lid random speed
-
-  digitalWrite(ledDebugPin, LOW); // DEBUG
 }
 
 // behaviors occurance weights
@@ -188,8 +179,10 @@ void loop() {
   ctx.distance = readProximity(); // Check proximity sensor min value
   //printContext(ctx);   // DEBUG OUTPUT
   if (ctx.toggleStatus || ctx.distance < 20) {
+    digitalWrite(ledDebugPin, HIGH); // DEBUG
     BehaviorFn behavior = pickBehavior();
     behavior(ctx);
+    digitalWrite(ledDebugPin, LOW); // DEBUG
   }
   delay(50);
 }
