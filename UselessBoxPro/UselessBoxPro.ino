@@ -32,7 +32,7 @@ const int stepDelayMsSlow = 60; // servo step delay resulting in slow speed
 // Behavior context
 struct BehaviorContext {
   bool toggleStatus;   // true = ON (switch pressed), false = OFF
-  float distanceCm;    // proximity sensor distance in cm
+  float distance;    // proximity sensor distance in cm
 };
 
 typedef void (*BehaviorFn)(const BehaviorContext& ctx);
@@ -42,22 +42,18 @@ struct WeightedBehavior {
   uint8_t weight;
 };
 
-// Setup
-void setup() {
-  pinMode(togglePin, INPUT_PULLUP); // enable internal pull-up
-  pinMode(ledDebugPin, OUTPUT); // onboard led shows toggle status
-  fingerServo.attach(fingerServoPin); // attache the servo pin to the Servo object
-  fingerServo.write(fingerServoPos); // set the servo initial position
-  lidServo.attach(lidServoPin); // attache the servo pin to the Servo object
-  lidServo.write(lidServoPos); // set the servo initial position
-  Serial.begin(9600);
-  randomSeed(analogRead(A0)); // random seed
+void printContext(const BehaviorContext& ctx) {
+  Serial.print("toggle status: ");
+  Serial.print(ctx.toggleStatus ? "ON" : "OFF");
+  Serial.print(" | distance (cm): ");
+  Serial.println(ctx.distance, 1);  // 1 decimal place
 }
 
 /////////////////////////////// FUNCTIONS //////////////////////////////////
 
 // Move fingerServo from current pos to target pos with a step delay
 void fingerServoMove(int targetPos, int stepDelayMs) {
+  fingerServo.attach(fingerServoPin);
   if (fingerServoPos < targetPos) {
     for (; fingerServoPos <= targetPos; fingerServoPos++) {
       fingerServo.write(fingerServoPos);
@@ -69,10 +65,12 @@ void fingerServoMove(int targetPos, int stepDelayMs) {
       delay(stepDelayMs);
     }
   }
+  fingerServo.detach();
 }
 
 // Move lidServo from current pos to target pos with a step delay
 void lidServoMove(int targetPos, int stepDelayMs) {
+  lidServo.attach(lidServoPin);
   if (lidServoPos < targetPos) {
     for (; lidServoPos <= targetPos; lidServoPos++) {
       lidServo.write(lidServoPos);
@@ -84,6 +82,7 @@ void lidServoMove(int targetPos, int stepDelayMs) {
       delay(stepDelayMs);
     }
   }
+  lidServo.detach();
 }
 
 float readProximity() {
@@ -107,47 +106,54 @@ int randomBetween(int low, int high) {
   return random(low, high + 1);
 }
 
+// Setup
+void setup() {
+  pinMode(togglePin, INPUT_PULLUP); // enable internal pull-up
+  pinMode(ledDebugPin, OUTPUT); // onboard led shows toggle status
+  fingerServoMove(fingerServoPos, stepDelayMsFast); // set the servo initial position
+  lidServoMove(lidServoPos, stepDelayMsFast); // set the servo initial position
+  Serial.begin(9600);
+  randomSeed(analogRead(A0)); // random seed
+}
+
 /////////////////////////////// BEHAVIORS //////////////////////////////////
 
 void behavior_0(const BehaviorContext& ctx) {
-  if (ctx.toggleStatus == true) {
-    digitalWrite(ledDebugPin, HIGH); // DEBUG
+  Serial.println(__func__); // DEBUG
+  digitalWrite(ledDebugPin, HIGH); // DEBUG
 
-    lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
-    fingerServoMove(fingerServoPosToggle, stepDelayMsFast); // finger go fast
-    fingerServoMove(fingerServoPosStationary, stepDelayMsFast); // finger return fast
-    lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
+  lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
+  fingerServoMove(fingerServoPosToggle, stepDelayMsFast); // finger go fast
+  fingerServoMove(fingerServoPosStationary, stepDelayMsFast); // finger return fast
+  lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
 
-    digitalWrite(ledDebugPin, LOW); // DEBUG
-  }
+  digitalWrite(ledDebugPin, LOW); // DEBUG
 }
 
 void behavior_1(const BehaviorContext& ctx) {
-  if (ctx.toggleStatus == true) {
-    digitalWrite(ledDebugPin, HIGH); // DEBUG
+  Serial.println(__func__); // DEBUG
+  digitalWrite(ledDebugPin, HIGH); // DEBUG
 
-    lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
-    fingerServoMove(fingerServoPosToggle, stepDelayMsSlow); // finger go slow
-    fingerServoMove(fingerServoPosStationary, stepDelayMsSlow); // finger return slow
-    lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
+  lidServoMove(lidServoPosOpen, stepDelayMsFast); // open lid fast
+  fingerServoMove(fingerServoPosToggle, stepDelayMsSlow); // finger go slow
+  fingerServoMove(fingerServoPosStationary, stepDelayMsSlow); // finger return slow
+  lidServoMove(lidServoPosClose, stepDelayMsFast); // close lid fast
 
-    digitalWrite(ledDebugPin, LOW); // DEBUG
-  }
+  digitalWrite(ledDebugPin, LOW); // DEBUG
 }
 
 void behavior_2(const BehaviorContext& ctx) {
-  if (ctx.toggleStatus == true) {
-    digitalWrite(ledDebugPin, HIGH); // DEBUG
-    int lidServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
-    int fingerServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
+  Serial.println(__func__); // DEBUG
+  digitalWrite(ledDebugPin, HIGH); // DEBUG
 
-    lidServoMove(lidServoPosOpen, lidServoStepDelayMs); // open lid random speed
-    fingerServoMove(fingerServoPosToggle, fingerServoStepDelayMs); // finger go random speed
-    fingerServoMove(fingerServoPosStationary, fingerServoStepDelayMs); // finger return random speed
-    lidServoMove(lidServoPosClose, lidServoStepDelayMs); // close lid random speed
+  int lidServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
+  int fingerServoStepDelayMs = randomBetween(stepDelayMsSlow, stepDelayMsFast);
+  lidServoMove(lidServoPosOpen, lidServoStepDelayMs); // open lid random speed
+  fingerServoMove(fingerServoPosToggle, fingerServoStepDelayMs); // finger go random speed
+  fingerServoMove(fingerServoPosStationary, fingerServoStepDelayMs); // finger return random speed
+  lidServoMove(lidServoPosClose, lidServoStepDelayMs); // close lid random speed
 
-    digitalWrite(ledDebugPin, LOW); // DEBUG
-  }
+  digitalWrite(ledDebugPin, LOW); // DEBUG
 }
 
 // behaviors occurance weights
@@ -179,8 +185,11 @@ BehaviorFn pickBehavior() {
 void loop() {
   BehaviorContext ctx;
   ctx.toggleStatus = readToggleStatus(); // Check toggle on/off state
-  ctx.distanceCm = readProximity(); // Check proximity sensor min value
-  BehaviorFn behavior = pickBehavior();
-  behavior(ctx);
+  ctx.distance = readProximity(); // Check proximity sensor min value
+  //printContext(ctx);   // DEBUG OUTPUT
+  if (ctx.toggleStatus || ctx.distance < 20) {
+    BehaviorFn behavior = pickBehavior();
+    behavior(ctx);
+  }
   delay(50);
 }
