@@ -4,7 +4,7 @@ Modern Making Course Project by Justin
 By Aslan, Anouk, and Liza
 */
 
-//////////////////////////////////// IMPORTS //////////////////////////////////////
+///////////////////////////////////// IMPORTS /////////////////////////////////////
 
 #include <Servo.h>
 #include <Wire.h>
@@ -18,7 +18,7 @@ const uint8_t fingerServoPin = 5;
 const uint8_t lidServoPin = 6;
 const uint8_t XSHUT_PINS[3] = {9, 10, 11}; // Proximity sensor pins
 
-////////////////////////////////////// SETUP //////////////////////////////////////
+//////////////////////////////// COMPONENTS SETUP /////////////////////////////////
 
 // Finger servo setup
 Servo fingerServo; // controls finger
@@ -37,10 +37,10 @@ const int lidServoStepDelayFast = 10; // Lid servo step delay resulting in fast 
 const int lidServoStepDelaySlow = 60; // Lid servo step delay resulting in slow speed
 
 // Proximity sensors setup
-const uint8_t I2C_ADDRESSES[3]  = {0x30, 0x31, 0x32}; // new unique addresses
-VL53L0X tof[3]; // proximity sensors (3x VL53L0X)
+const uint8_t I2C_ADDRESSES[3]  = {0x30, 0x31, 0x32}; // New unique I2C addresses
+VL53L0X tof[3]; // Proximity sensors (3x VL53L0X)
 
-////////////////////////////////////// Tools //////////////////////////////////////
+////////////////////////////////////// TOOLS //////////////////////////////////////
 
 // Behavior context
 struct BehaviorContext {
@@ -97,13 +97,13 @@ void lidServoMove(int targetPos, int stepDelay) {
   lidServo.detach();
 }
 
-// Read proximity sensors (mm)
-float readProximity() /*{
-  // Returns minimum distance across 3 sensors, in cm.
+// Read proximity sensors (mm) (minimum distance across 3 sensors)
+float readProximity()
+/*
+{
   // If none valid, returns a large number.
   uint16_t best_mm = 65535;
   bool anyValid = false;
-
   for (uint8_t i = 0; i < 3; i++) {
     uint16_t d = tof[i].readRangeContinuousMillimeters();
     // Pololu library sets timeoutOccurred() if it failed to get a reading
@@ -117,9 +117,10 @@ float readProximity() /*{
     anyValid = true;
     if (d < best_mm) best_mm = d;
   }
-  if (!anyValid) return 999.0; // "no hand detected"
+  if (!anyValid) return 999.0; // If none valid, returns a large number: "no hand detected"
   return best_mm; // mm
-}*/
+}
+*/
 {
   return 999;
 }
@@ -139,58 +140,64 @@ int randomBetween(int low, int high) {
   return random(low, high + 1);
 }
 
-bool initToF() {
+////////////////////////////////////// SETUP //////////////////////////////////////
+
+bool initServoMotors () {
+  pinMode(togglePin, INPUT_PULLUP); // enable internal pull-up
+  pinMode(ledDebugPin, OUTPUT); // onboard led shows toggle status
+  fingerServoMove(fingerServoPos, fingerServoStepDelayFast); // set the servo initial position
+  lidServoMove(lidServoPos, lidServoStepDelayFast); // set the servo initial position
+  Serial.println(F("Servo motors ready."));
+}
+
+bool initToFSensors() {
+  Wire.begin(); // Start I2C
+  Wire.setClock(400000); // Optional: faster I2C; safe on short wires
   // XSHUT pins as outputs
   for (uint8_t i = 0; i < 3; i++) {
     pinMode(XSHUT_PINS[i], OUTPUT);
   }
-  // Shut down all sensors
+  // Shut down all sensors (so only one responds at 0x29)
   for (uint8_t i = 0; i < 3; i++) {
     digitalWrite(XSHUT_PINS[i], LOW);
   }
   delay(10);
-  // Bring them up one by one, assign unique I2C addresses
+  // Bring them up one by one and re-address
   for (uint8_t i = 0; i < 3; i++) {
     digitalWrite(XSHUT_PINS[i], HIGH);
     delay(10);
-    tof[i].setTimeout(50);   // prevents hanging if a sensor misbehaves
+    tof[i].setTimeout(50); // Prevents hanging on bad sensor/wiring
     if (!tof[i].init()) {
       Serial.print(F("ToF init failed at index "));
       Serial.println(i);
       return false;
     }
-    // Assign a new address (must be done while others are still shut down)
     tof[i].setAddress(I2C_ADDRESSES[i]);
-    // Recommended: better stability in close range
-    tof[i].startContinuous(0); // continuous mode; 0 = as fast as possible
+    // Continuous mode improves read speed + stability
+    tof[i].startContinuous(0);
     delay(10);
   }
+  Serial.println(F("3x VL53L0X ready."));
   return true;
 }
 
 // Setup
 void setup() {
   Serial.begin(115200);
-  randomSeed(analogRead(A0)); // random seed
-  pinMode(togglePin, INPUT_PULLUP); // enable internal pull-up
-  pinMode(ledDebugPin, OUTPUT); // onboard led shows toggle status
-  fingerServoMove(fingerServoPos, fingerServoStepDelayFast); // set the servo initial position
-  lidServoMove(lidServoPos, lidServoStepDelayFast); // set the servo initial position
-  //Serial.println(F("Servo motors ready."));
-  // Initialize ToF sensors
+  randomSeed(analogRead(A0)); // Random seed
+  initServoMotors();
   /*
-  Wire.begin(); // For sensors
-  if (!initToF()) {
+  if (!initToFSensors()) {
     Serial.println(F("VL53L0X init failed. Check wiring/XSHUT/VIN/GND/SDA/SCL."));
     while (1) {
       digitalWrite(ledDebugPin, !digitalRead(ledDebugPin));
       delay(200);
     }
   }
-  Serial.println(F("3x VL53L0X ready."));*/
+  */
 }
 
-/////////////////////////////// BEHAVIORS //////////////////////////////////
+//////////////////////////////////// BEHAVIORS ////////////////////////////////////
 
 void behavior_0(const BehaviorContext& ctx) {
   Serial.println(__func__); // DEBUG
@@ -225,6 +232,8 @@ WeightedBehavior behaviors[] = {
   { behavior_2, 5 },
 };
 
+//////////////////////////////// COMPILE BEHAVIORS /////////////////////////////////
+
 // compile behaviors
 const uint8_t behaviorCount = sizeof(behaviors) / sizeof(behaviors[0]);
 
@@ -242,7 +251,7 @@ BehaviorFn pickBehavior() {
   return behaviors[0].fn;
 }
 
-///////////////////////////////// MAIN /////////////////////////////////////
+////////////////////////////////////// MAIN //////////////////////////////////////
 
 void loop() {
   BehaviorContext ctx;
