@@ -13,9 +13,9 @@ By Aslan, Anouk, and Liza
 ////////////////////////////////////// PINS ///////////////////////////////////////
 
 const uint8_t ledDebugPin = 13; // Onboard LED (Arduino Uno), represents system awakening
-const uint8_t togglePin = 2;
-const uint8_t fingerServoPin = 5;
-const uint8_t lidServoPin = 6;
+const uint8_t togglePin = 2; // Toggle key pin
+const uint8_t fingerServoPin = 5; // Servo motor controlling finger pin
+const uint8_t lidServoPin = 6; // Servo motor controlling lid pin
 const uint8_t XSHUT_PINS[3] = {9, 10, 11}; // Proximity sensor pins
 
 //////////////////////////////// COMPONENTS SETUP /////////////////////////////////
@@ -37,6 +37,7 @@ const int lidServoStepDelayFast = 10; // Lid servo step delay resulting in fast 
 const int lidServoStepDelaySlow = 60; // Lid servo step delay resulting in slow speed
 
 // Proximity sensors setup
+const uint16_t HAND_NEAR = 100;  // Hand is "near" if distance < HAND_NEAR
 const uint8_t I2C_ADDRESSES[3]  = {0x30, 0x31, 0x32}; // New unique I2C addresses
 VL53L0X tof[3]; // Proximity sensors (3x VL53L0X)
 
@@ -45,7 +46,7 @@ VL53L0X tof[3]; // Proximity sensors (3x VL53L0X)
 // Behavior context
 struct BehaviorContext {
   bool toggleStatus;   // true = ON (switch pressed), false = OFF
-  float distance;    // proximity sensor distance in cm
+  float distance;    // proximity sensor distance in mm
 };
 
 typedef void (*BehaviorFn)(const BehaviorContext& ctx);
@@ -200,36 +201,68 @@ void setup() {
 //////////////////////////////////// BEHAVIORS ////////////////////////////////////
 
 void behavior_0(const BehaviorContext& ctx) {
-  Serial.println(__func__); // DEBUG
-  lidServoMove(lidServoPosOpen, fingerServoStepDelayFast); // Open lid fast
-  fingerServoMove(fingerServoPosToggle, lidServoStepDelayFast); // Finger go fast
-  fingerServoMove(fingerServoPosStationary, lidServoStepDelayFast); // Finger return fast
-  lidServoMove(lidServoPosClose, fingerServoStepDelayFast); // Close lid fast
+  if (ctx.toggleStatus) {
+    Serial.println(__func__); // DEBUG
+    digitalWrite(ledDebugPin, HIGH); // DEBUG: System awakening sign
+
+    int lidServoStepDelay = randomBetween(fingerServoStepDelaySlow, fingerServoStepDelayFast);
+    int fingerServoStepDelay = randomBetween(lidServoStepDelaySlow, lidServoStepDelayFast);
+    int randomDelay = randomBetween(10, 1000);
+    delay(randomDelay);
+    lidServoMove(lidServoPosOpen, lidServoStepDelay); // Open lid random speed
+    fingerServoMove(fingerServoPosToggle, fingerServoStepDelay); // Finger go random speed
+    delay(20);
+    fingerServoMove(fingerServoPosStationary, fingerServoStepDelay); // Finger return random speed
+    lidServoMove(lidServoPosClose, lidServoStepDelay); // Close lid random speed
+
+    digitalWrite(ledDebugPin, LOW); // DEBUG: System sleeping sign
+  }
 }
 
 void behavior_1(const BehaviorContext& ctx) {
-  Serial.println(__func__); // DEBUG
-  lidServoMove(lidServoPosOpen, fingerServoStepDelayFast); // Open lid fast
-  fingerServoMove(fingerServoPosToggle, lidServoStepDelaySlow); // Finger go slow
-  fingerServoMove(fingerServoPosStationary, lidServoStepDelaySlow); // Finger return slow
-  lidServoMove(lidServoPosClose, fingerServoStepDelayFast); // Close lid fast
-}
-
-void behavior_2(const BehaviorContext& ctx) {
-  Serial.println(__func__); // DEBUG
-  int lidServoStepDelay = randomBetween(fingerServoStepDelaySlow, fingerServoStepDelayFast);
-  int fingerServoStepDelay = randomBetween(lidServoStepDelaySlow, lidServoStepDelayFast);
-  lidServoMove(lidServoPosOpen, lidServoStepDelay); // Open lid random speed
-  fingerServoMove(fingerServoPosToggle, fingerServoStepDelay); // Finger go random speed
-  fingerServoMove(fingerServoPosStationary, fingerServoStepDelay); // Finger return random speed
-  lidServoMove(lidServoPosClose, lidServoStepDelay); // Close lid random speed
+  if (ctx.toggleStatus) {
+    behavior_0(ctx);
+    return;
+  }
+  if (ctx.distance <= HAND_NEAR) {
+    Serial.println(__func__); // DEBUG
+    digitalWrite(ledDebugPin, HIGH); // DEBUG: System awakening sign
+    
+    lidServoMove(lidServoPosOpen, fingerServoStepDelayFast); // Open lid fast
+    while (true) {
+      // Dynamic context
+      bool toggleOn = readToggleStatus();
+      uint16_t d = (uint16_t)readProximity();   // mm
+      bool handNear = (d < HAND_NEAR);
+      if (!handNear && !toggleOn) {
+        lidServoMove(lidServoPosClose, lidServoStepDelayFast);
+        digitalWrite(ledDebugPin, LOW); // DEBUG: System sleeping sign
+        return;
+      }
+      if (toggleOn) {
+        // Wait until hand goes away
+        while (true) {
+          d = (uint16_t)readProximity();
+          if (d >= HAND_NEAR) break;
+          delay(20);
+        }
+        // Now hand is away: toggle OFF with finger, return stationary, close lid
+        fingerServoMove(fingerServoPosToggle, fingerServoStepDelayFast);
+        delay(20);
+        fingerServoMove(fingerServoPosStationary, fingerServoStepDelayFast);
+        lidServoMove(lidServoPosClose, lidServoStepDelayFast);
+        digitalWrite(ledDebugPin, LOW); // DEBUG: System sleeping sign
+        return;
+      }
+      delay(20); // IMPORTANT: prevent CPU/I2C hammering
+    }
+  }
 }
 
 // behaviors occurance weights
 WeightedBehavior behaviors[] = {
-  { behavior_0, 1 },
-  { behavior_1, 1 },
-  { behavior_2, 5 },
+  { behavior_0, 1 }, // Normal behavior, random action speed and delay
+  { behavior_1, 1 }, // Open lid in hand proximity
 };
 
 //////////////////////////////// COMPILE BEHAVIORS /////////////////////////////////
@@ -258,11 +291,7 @@ void loop() {
   ctx.toggleStatus = readToggleStatus(); // Check toggle on/off state
   ctx.distance = readProximity(); // Check proximity sensor min value
   //printContext(ctx);   // DEBUG OUTPUT
-  if (ctx.toggleStatus || ctx.distance < 20) {
-    digitalWrite(ledDebugPin, HIGH); // DEBUG: System awakening sign
-    BehaviorFn behavior = pickBehavior();
-    behavior(ctx);
-    digitalWrite(ledDebugPin, LOW); // DEBUG: : System sleeping sign
-  }
+  BehaviorFn behavior = pickBehavior();
+  behavior(ctx);
   delay(50);
 }
