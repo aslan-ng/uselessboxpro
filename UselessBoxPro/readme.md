@@ -6,7 +6,7 @@ Welcome to Useless Box Pro!
 
 * Arduino Board
 * Servo Motor x2
-* VL Proximity Sensors x3
+* VL53L0X Proximity Sensors x3
 * Hook-up wires
 
 ## Circuit
