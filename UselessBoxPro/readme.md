@@ -1,29 +1,16 @@
 # Sweep
 
-Sweeps the shaft of an RC [servo motor](http://en.wikipedia.org/wiki/Servo_motor#RC_servos) back and forth across 180 degrees.
+Welcome to Useless Box Pro!
 
 ## Hardware Required
 
 * Arduino Board
-* Servo Motor
+* Servo Motor x2
+* VL Proximity Sensors x3
 * Hook-up wires
 
 ## Circuit
 
-Servo motors have three wires: power, ground, and signal. The power wire is typically red, and should be connected to the 5V pin on the Arduino board. The ground wire is typically black or brown and should be connected to a ground pin on the board. The signal pin is typically yellow, orange or white and should be connected to pin 9 on the board.
+![](images/circuit_image.png)
 
-![](images/sweep_bb.png)
-
-(Images developed using Fritzing. For more circuit examples, see the [Fritzing project page](http://fritzing.org/projects/))
-
-## Schematic
-
-![](images/sweep_schem.png)
-
-## See also
-
-* [attach()](/docs/api.md#attach)
-* [write()](/docs/api.md#write)
-* [map()](https://www.arduino.cc/en/Reference/Map)
-* [Servo library reference](/docs/readme.md)
-* [Knob](../Knob) - Control the position of a servo with a potentiometer
+(Images developed using cirkitdesigner: [link](https://app.cirkitdesigner.com/project/056a39d6-0035-4893-9103-fd14b4bae81c))
